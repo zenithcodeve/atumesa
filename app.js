@@ -163,14 +163,67 @@ function initDeliveryMap(initialLocation = null) {
 function readStore(key, fallback) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
 }
-function writeStore(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
-function createId(prefix = 'id') { return `${prefix}-${Math.random().toString(36).slice(2, 10)}`; }
+function writeStore(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+  if (state.supabaseEnabled && state.supabase) {
+    void persistSupabaseState(key, value);
+  }
+}
+function createId(prefix = 'id') {
+  if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`;
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
 function getExchangeRate() { return Number(readStore(STORAGE_KEYS.exchangeRate, 36)) || 36; }
 function setExchangeRate(value) { writeStore(STORAGE_KEYS.exchangeRate, Number(value) || 36); }
 function getUsdPrice(product) { return Number(product.priceUsd ?? product.price ?? 0); }
 function getBsPrice(product) { return getUsdPrice(product) * getExchangeRate(); }
 function formatUsd(value) { return `USD $${Number(value || 0).toFixed(2)}`; }
 function formatBs(value) { return `Bs ${Number(value || 0).toFixed(2)}`; }
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sin fecha';
+  return date.toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short', hour12: true });
+}
+function normalizeTimeValue(value) {
+  if (!value) return '09:00';
+  const input = String(value).trim().toUpperCase();
+  const match = input.match(/^(\d{1,2})(?::(\d{2}))?\s?(AM|PM)?$/i);
+  if (!match) return '09:00';
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] || '00');
+  const suffix = match[3];
+  if (suffix === 'PM' && hours < 12) hours += 12;
+  if (suffix === 'AM' && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+function formatTime12(value) {
+  const normalized = normalizeTimeValue(value);
+  const [hours, minutes] = normalized.split(':').map(Number);
+  const safeHours = Number.isNaN(hours) ? 9 : hours;
+  const safeMinutes = Number.isNaN(minutes) ? 0 : minutes;
+  const suffix = safeHours >= 12 ? 'PM' : 'AM';
+  const normalizedHours = safeHours % 12 || 12;
+  return `${normalizedHours}:${String(safeMinutes).padStart(2, '0')} ${suffix}`;
+}
+function parseTimeToMinutes(value) {
+  const [hours, minutes] = String(value || '09:00').split(':').map(Number);
+  return (Number.isNaN(hours) ? 9 : hours) * 60 + (Number.isNaN(minutes) ? 0 : minutes);
+}
+function getAllyAvailability(ally) {
+  const workingStart = ally?.workingStart || '09:00';
+  const workingEnd = ally?.workingEnd || '22:00';
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = parseTimeToMinutes(workingStart);
+  const endMinutes = parseTimeToMinutes(workingEnd);
+  const isInWindow = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  const isOpen = ally?.isOpen !== false && isInWindow;
+  return {
+    isOpen,
+    label: isOpen ? 'Abierto' : 'Cerrado',
+    schedule: `${formatTime12(workingStart)} - ${formatTime12(workingEnd)}`
+  };
+}
 function renderPrice(product) { const usd = getUsdPrice(product); const bs = usd * getExchangeRate(); return `${formatUsd(usd)} · ${formatBs(bs)}`; }
 function getRoleLabel(role) { return ROLE_LABELS[role] || 'Usuario'; }
 function getProfileSummary(user) { return { phone: user?.phone || '', address: user?.address || '' }; }
@@ -196,46 +249,191 @@ function getDeliveryRouteSummary(delivery) {
 
 function seedDemoData() {
   if (!readStore(STORAGE_KEYS.exchangeRate, null)) setExchangeRate(36);
-  if (!readStore(STORAGE_KEYS.users, null)) {
-    writeStore(STORAGE_KEYS.users, [
-      { id: 'user-admin', name: 'Admin', email: 'admin@tumesa.com', password: 'Admin2026!', role: 'admin', phone: '+58 412 0000000', address: 'Caracas, Venezuela' },
-      { id: 'user-support', name: 'Soporte', email: 'soporte@tumesa.com', password: 'Soporte2026!', role: 'support', phone: '+58 414 0000000', address: 'Caracas, Venezuela' },
-      { id: 'user-ally', name: 'Aliado Pizza', email: 'aliado@tumesa.com', password: 'Tm2026!', role: 'ally' },
-      { id: 'user-rider', name: 'Luis', email: 'rider@tumesa.com', password: 'rider123', role: 'rider' },
-      { id: 'user-client', name: 'Cliente Demo', email: 'cliente@tumesa.com', password: 'cliente123', role: 'client' }
-    ]);
-  }
-  if (!readStore(STORAGE_KEYS.allies, null)) {
-    writeStore(STORAGE_KEYS.allies, [{ id: 'ally-1', name: 'Pizza Express', email: 'pizza@tumesa.com', password: 'ally123', role: 'ally', status: 'active', commission: 10, products: ['p1', 'p2'], promotions: ['promo-1'], photo: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80' }]);
-  }
-  if (!readStore(STORAGE_KEYS.products, null)) {
-    writeStore(STORAGE_KEYS.products, [
-      { id: 'p1', allyId: 'ally-1', name: 'Pizza Pepperoni', priceUsd: 12.5, category: 'Pizzas', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80' },
-      { id: 'p2', allyId: 'ally-1', name: 'Burrito Especial', priceUsd: 10, category: 'Mexicana', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=300&q=80' }
-    ]);
-  }
-  if (!readStore(STORAGE_KEYS.promotions, null)) {
-    writeStore(STORAGE_KEYS.promotions, [{ id: 'promo-1', allyId: 'ally-1', title: '2x1 en pizzas', active: true }]);
-  }
+  if (!readStore(STORAGE_KEYS.users, null)) writeStore(STORAGE_KEYS.users, []);
+  if (!readStore(STORAGE_KEYS.allies, null)) writeStore(STORAGE_KEYS.allies, []);
+  if (!readStore(STORAGE_KEYS.products, null)) writeStore(STORAGE_KEYS.products, []);
+  if (!readStore(STORAGE_KEYS.promotions, null)) writeStore(STORAGE_KEYS.promotions, []);
   if (!readStore(STORAGE_KEYS.cart, null)) writeStore(STORAGE_KEYS.cart, []);
   if (!readStore(STORAGE_KEYS.orders, null)) writeStore(STORAGE_KEYS.orders, []);
-  if (!readStore(STORAGE_KEYS.deliveries, null)) {
-    writeStore(STORAGE_KEYS.deliveries, [
-      { id: 'delivery-1', orderId: 'order-1', customer: 'Ana', address: 'Av. Central, Caracas', status: 'en camino', merchantLat: DEFAULT_MERCHANT_COORDS.lat, merchantLon: DEFAULT_MERCHANT_COORDS.lon, deliveryLat: DEFAULT_DELIVERY_COORDS.lat, deliveryLon: DEFAULT_DELIVERY_COORDS.lon },
-      { id: 'delivery-2', orderId: 'order-2', customer: 'Carlos', address: 'San Martín, Valencia', status: 'pendiente', merchantLat: DEFAULT_MERCHANT_COORDS.lat, merchantLon: DEFAULT_MERCHANT_COORDS.lon, deliveryLat: DEFAULT_DELIVERY_COORDS.lat, deliveryLon: DEFAULT_DELIVERY_COORDS.lon }
-    ]);
-  }
+  if (!readStore(STORAGE_KEYS.deliveries, null)) writeStore(STORAGE_KEYS.deliveries, []);
 }
 
 function getCurrentUser() {
   const stored = readStore(STORAGE_KEYS.currentUser, null);
   return stored || null;
 }
-function setCurrentUser(user) { writeStore(STORAGE_KEYS.currentUser, user); state.user = user; }
+async function syncUserProfile(user) {
+  if (!state.supabaseEnabled || !state.supabase || !user?.email) return;
+  const profile = {
+    id: user.id,
+    auth_id: user.id,
+    name: user.name || '',
+    email: user.email,
+    phone: user.phone || '',
+    address: user.address || '',
+    role: user.role || 'client',
+    created_at: new Date().toISOString()
+  };
+  const { error } = await state.supabase.from('profiles').upsert(profile, { onConflict: 'id' });
+  if (error) console.error('No se pudo sincronizar el perfil', error);
+}
+function setCurrentUser(user) { writeStore(STORAGE_KEYS.currentUser, user); state.user = user; void syncUserProfile(user); }
 function clearCurrentUser() { localStorage.removeItem(STORAGE_KEYS.currentUser); state.user = null; }
 
 function isSupabaseConfigured() {
   return !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY && !window.SUPABASE_URL.includes('your-project') && !window.SUPABASE_ANON_KEY.includes('your-anon-key'));
+}
+
+function normalizeSupabaseRow(key, row) {
+  const id = row.id || createId(key);
+  switch (key) {
+    case STORAGE_KEYS.allies:
+      return {
+        id,
+        name: row.name || '',
+        email: row.email || '',
+        password: row.password || '',
+        role: row.role || 'ally',
+        commission: Number(row.commission || 0),
+        status: row.status || 'active',
+        photo: row.photo || null,
+        gps_lat: row.gps?.lat ?? null,
+        gps_lon: row.gps?.lon ?? null,
+        working_start: row.workingStart || '09:00',
+        working_end: row.workingEnd || '22:00',
+        is_open: row.isOpen !== false,
+        source: row.source || 'local',
+        created_at: row.createdAt || new Date().toISOString()
+      };
+    case STORAGE_KEYS.products:
+      return {
+        id,
+        ally_id: row.allyId || null,
+        name: row.name || '',
+        price_usd: Number(row.priceUsd ?? row.price ?? 0),
+        category: row.category || '',
+        image: row.image || null,
+        source: row.source || 'local',
+        created_at: row.createdAt || new Date().toISOString()
+      };
+    case STORAGE_KEYS.promotions:
+      return {
+        id,
+        ally_id: row.allyId || null,
+        title: row.title || '',
+        active: Boolean(row.active),
+        source: row.source || 'local',
+        created_at: row.createdAt || new Date().toISOString()
+      };
+    case STORAGE_KEYS.orders:
+      return {
+        id,
+        user_id: row.userId || null,
+        user_email: row.userEmail || null,
+        user_name: row.userName || null,
+        total_usd: Number(row.totalUsd || 0),
+        total_bs: Number(row.totalBs || 0),
+        shipping_usd: Number(row.shippingUsd || 0),
+        shipping_bs: Number(row.shippingBs || 0),
+        delivery_distance: Number(row.deliveryDistance || row.deliveryDistance || 0),
+        status: row.status || 'pendiente',
+        address: row.address || '',
+        delivery_location: row.deliveryLocation || null,
+        merchant_location: row.merchantLocation || null,
+        source: row.source || 'local',
+        created_at: row.createdAt || new Date().toISOString()
+      };
+    case STORAGE_KEYS.deliveries:
+      return {
+        id,
+        order_id: row.orderId || null,
+        customer: row.customer || '',
+        address: row.address || '',
+        status: row.status || 'pendiente',
+        merchant_lat: row.merchantLat ?? null,
+        merchant_lon: row.merchantLon ?? null,
+        delivery_lat: row.deliveryLat ?? null,
+        delivery_lon: row.deliveryLon ?? null,
+        distance_km: Number(row.distanceKm || 0),
+        shipping_usd: Number(row.shippingUsd || 0),
+        created_at: row.createdAt || new Date().toISOString()
+      };
+    case STORAGE_KEYS.exchangeRate:
+      return { id: row.id || 'rate-1', value: Number(row.value ?? row ?? 36), created_at: new Date().toISOString() };
+    default:
+      return { ...row, id };
+  }
+}
+
+function hydrateSupabaseRow(key, row) {
+  switch (key) {
+    case STORAGE_KEYS.allies:
+      return {
+        ...row,
+        id: row.id,
+        gps: row.gps_lat != null || row.gps_lon != null ? { lat: row.gps_lat, lon: row.gps_lon } : null,
+        workingStart: row.working_start || '09:00',
+        workingEnd: row.working_end || '22:00',
+        isOpen: row.is_open !== false,
+        source: row.source || 'local'
+      };
+    case STORAGE_KEYS.products:
+      return { ...row, id: row.id, allyId: row.ally_id, priceUsd: Number(row.price_usd || 0), source: row.source || 'local' };
+    case STORAGE_KEYS.promotions:
+      return { ...row, id: row.id, allyId: row.ally_id, source: row.source || 'local' };
+    case STORAGE_KEYS.orders:
+      return { ...row, id: row.id, userId: row.user_id, userEmail: row.user_email, userName: row.user_name, totalUsd: Number(row.total_usd || 0), totalBs: Number(row.total_bs || 0), shippingUsd: Number(row.shipping_usd || 0), shippingBs: Number(row.shipping_bs || 0), deliveryDistance: Number(row.delivery_distance || 0), source: row.source || 'local' };
+    case STORAGE_KEYS.deliveries:
+      return { ...row, id: row.id, orderId: row.order_id, merchantLat: row.merchant_lat, merchantLon: row.merchant_lon, deliveryLat: row.delivery_lat, deliveryLon: row.delivery_lon, distanceKm: Number(row.distance_km || 0), shippingUsd: Number(row.shipping_usd || 0) };
+    case STORAGE_KEYS.exchangeRate:
+      return Number(row.value ?? row ?? 36);
+    default:
+      return row;
+  }
+}
+
+async function persistSupabaseState(key, value) {
+  if (!state.supabaseEnabled || !state.supabase) return;
+  const tableMap = {
+    [STORAGE_KEYS.allies]: 'allies',
+    [STORAGE_KEYS.products]: 'products',
+    [STORAGE_KEYS.promotions]: 'promotions',
+    [STORAGE_KEYS.orders]: 'orders',
+    [STORAGE_KEYS.deliveries]: 'deliveries',
+    [STORAGE_KEYS.exchangeRate]: 'exchange_rates'
+  };
+  const table = tableMap[key];
+  if (!table) return;
+  const rows = Array.isArray(value) ? value : [value];
+  const payload = rows.filter(Boolean).map((row) => normalizeSupabaseRow(key, row));
+  const { error } = await state.supabase.from(table).upsert(payload, { onConflict: 'id' });
+  if (error) console.error(`No se pudo guardar en Supabase (${table})`, error);
+}
+
+async function loadSupabaseState() {
+  if (!state.supabaseEnabled || !state.supabase) return false;
+  const tasks = [
+    { key: STORAGE_KEYS.allies, table: 'allies', fallback: [] },
+    { key: STORAGE_KEYS.products, table: 'products', fallback: [] },
+    { key: STORAGE_KEYS.promotions, table: 'promotions', fallback: [] },
+    { key: STORAGE_KEYS.orders, table: 'orders', fallback: [] },
+    { key: STORAGE_KEYS.deliveries, table: 'deliveries', fallback: [] }
+  ];
+  for (const task of tasks) {
+    const { data, error } = await state.supabase.from(task.table).select('*');
+    if (!error && Array.isArray(data)) {
+      writeStore(task.key, data.map((row) => hydrateSupabaseRow(task.key, row)));
+    } else if (readStore(task.key, null) === null) {
+      writeStore(task.key, task.fallback);
+    }
+  }
+  const { data: rateData, error: rateError } = await state.supabase.from('exchange_rates').select('*').order('created_at', { ascending: false }).limit(1);
+  if (!rateError && Array.isArray(rateData) && rateData[0]) {
+    writeStore(STORAGE_KEYS.exchangeRate, Number(rateData[0].value || 36));
+  } else if (readStore(STORAGE_KEYS.exchangeRate, null) === null) {
+    writeStore(STORAGE_KEYS.exchangeRate, 36);
+  }
+  return true;
 }
 
 async function initSupabaseIfPossible() {
@@ -255,6 +453,7 @@ async function initSupabaseIfPossible() {
     }
   });
   state.supabaseEnabled = true;
+  await loadSupabaseState();
   return true;
 }
 
@@ -384,9 +583,11 @@ async function createOrder() {
   window.location.href = 'index.html.html';
 }
 
-function addAlly(name, email, password, role, commission, photo, gps) {
+function addAlly(name, email, password, role, commission, photo, gps, workingStart = '09:00', workingEnd = '22:00', isOpen = true) {
   const allies = readStore(STORAGE_KEYS.allies, []);
-  const ally = { id: createId('ally'), name, email, password, role, commission: Number(commission || 0), status: 'active', products: [], promotions: [], photo, gps, source: 'local' };
+  const normalizedStart = normalizeTimeValue(workingStart);
+  const normalizedEnd = normalizeTimeValue(workingEnd);
+  const ally = { id: createId('ally'), name, email, password, role, commission: Number(commission || 0), status: isOpen ? 'active' : 'paused', products: [], promotions: [], photo, gps, workingStart: normalizedStart, workingEnd: normalizedEnd, isOpen, source: 'local' };
   allies.push(ally);
   writeStore(STORAGE_KEYS.allies, allies);
   return ally;
@@ -424,21 +625,34 @@ function readImageFromFile(file) {
 function renderRestaurants() {
   const container = document.getElementById('restaurants');
   if (!container) return;
+  const allies = readStore(STORAGE_KEYS.allies, []).filter((ally) => ally.role === 'ally');
+  if (!allies.length) {
+    container.innerHTML = '<div class="card empty">Aún no hay aliados disponibles.</div>';
+    return;
+  }
   const products = readStore(STORAGE_KEYS.products, []);
-  container.innerHTML = products.map((product) => `
-    <div class="card restaurant">
-      <div class="thumb">${product.image ? `<img src="${product.image}" alt="${product.name}" />` : '🍽️'}</div>
-      <div style="flex:1">
-        <h3>${product.name}</h3>
-        <p class="muted">${product.category}</p>
-        <div class="small" style="margin:8px 0">${renderPrice(product)}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn btn-primary" href="restaurant.html?id=${product.id}">Ver menú</a>
-          <button class="btn btn-secondary add-cart" data-product='${encodeURIComponent(JSON.stringify(product))}'>Agregar</button>
+  container.innerHTML = allies.map((ally) => {
+    const availability = getAllyAvailability(ally);
+    const allyProducts = products.filter((product) => product.allyId === ally.id);
+    return `
+      <div class="card restaurant">
+        <div class="thumb">${ally.photo ? `<img src="${ally.photo}" alt="${ally.name}" />` : '🏪'}</div>
+        <div style="flex:1">
+          <h3>${ally.name}</h3>
+          <p class="muted">${availability.label} · ${availability.schedule}</p>
+          <div class="small" style="margin:8px 0">Horario de atención: ${formatTime12(ally.workingStart || '09:00')} - ${formatTime12(ally.workingEnd || '22:00')}</div>
+          ${allyProducts.length ? `<div style="display:grid;gap:6px;margin-top:8px">${allyProducts.map((product) => `
+            <div class="card" style="margin:0;padding:10px">
+              <strong>${product.name}</strong>
+              <div class="muted">${product.category}</div>
+              <div class="small" style="margin-top:6px">${renderPrice(product)}</div>
+              <button class="btn btn-secondary add-cart" style="margin-top:8px" data-product='${encodeURIComponent(JSON.stringify(product))}'>Agregar</button>
+            </div>
+          `).join('')}</div>` : '<div class="empty">Sin productos aún.</div>'}
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
   container.querySelectorAll('.add-cart').forEach(btn => btn.addEventListener('click', () => {
     addToCart(JSON.parse(decodeURIComponent(btn.dataset.product)));
     showMessage('Producto agregado al carrito', 'success');
@@ -585,7 +799,7 @@ function renderProfilePanel() {
   }
   ordersBox.innerHTML = orders.map(order => `
     <div class="list-item">
-      <div><strong>${order.id}</strong><br><span class="muted">${new Date(order.createdAt).toLocaleString()}</span></div>
+      <div><strong>${order.id}</strong><br><span class="muted">${formatDateTime(order.createdAt)}</span></div>
       <div class="pill">${formatUsd(order.totalUsd || 0)}</div>
     </div>
   `).join('');
@@ -699,9 +913,9 @@ function renderAdminPage() {
     <div class="list-item">
       <div style="display:flex;gap:10px;align-items:center">
         <div class="mini-photo">${a.photo ? `<img src="${a.photo}" alt="${a.name}" />` : '🏪'}</div>
-        <div><strong>${a.name}</strong><br><span class="muted">${a.email} · ${a.role}</span></div>
+        <div><strong>${a.name}</strong><br><span class="muted">${a.email} · ${a.role} · ${getAllyAvailability(a).label} · ${getAllyAvailability(a).schedule}</span></div>
       </div>
-      <span class="pill">${a.status}</span>
+      <span class="pill">${a.isOpen === false ? 'Cerrado' : 'Abierto'}</span>
     </div>
   `).join('');
   const form = document.getElementById('allyForm');
@@ -722,7 +936,10 @@ function renderAdminPage() {
         lat: document.getElementById('allyGpsLat').value,
         lon: document.getElementById('allyGpsLon').value
       };
-      addAlly(name, email, password, role, commission, photo, gps);
+      const workingStart = document.getElementById('allyWorkStart').value || '09:00';
+      const workingEnd = document.getElementById('allyWorkEnd').value || '22:00';
+      const isOpen = document.getElementById('allyIsOpen').checked;
+      addAlly(name, email, password, role, commission, photo, gps, workingStart, workingEnd, isOpen);
       form.reset();
       renderAdminPage();
       showMessage('Aliado o motorizado creado correctamente', 'success');
@@ -744,16 +961,59 @@ function renderAdminPage() {
 function renderAllyPage() {
   const list = document.getElementById('allyProducts');
   if (!list) return;
-  const products = readStore(STORAGE_KEYS.products, []);
-  list.innerHTML = products.map(p => `
-    <div class="list-item">
-      <div style="display:flex;gap:10px;align-items:center">
-        <div class="mini-photo">${p.image ? `<img src="${p.image}" alt="${p.name}" />` : '🍽️'}</div>
-        <div><strong>${p.name}</strong><br><span class="muted">${p.category}</span></div>
+  const allies = readStore(STORAGE_KEYS.allies, []);
+  const currentAlly = allies.find((ally) => ally.email === state.user?.email || ally.id === state.user?.id) || null;
+  const products = readStore(STORAGE_KEYS.products, []).filter((product) => !currentAlly || product.allyId === currentAlly.id);
+  const availability = currentAlly ? getAllyAvailability(currentAlly) : { label: 'Sin estado', schedule: '09:00 - 22:00' };
+  list.innerHTML = `
+    ${currentAlly ? `
+      <div class="card" style="margin-bottom:10px">
+        <strong>${currentAlly.name}</strong>
+        <p class="muted">${availability.label} · ${availability.schedule}</p>
+        <button class="btn btn-primary" id="toggleAllyStatus">${currentAlly.isOpen === false ? 'Abrir negocio' : 'Cerrar negocio'}</button>
       </div>
-      <span class="pill">${formatUsd(getUsdPrice(p))} · ${formatBs(getBsPrice(p))}</span>
-    </div>
-  `).join('');
+      <div class="card" style="margin-bottom:10px">
+        <h4>Horario de trabajo</h4>
+        <form id="scheduleForm">
+          <input id="scheduleWorkStart" class="input" type="text" value="${currentAlly.workingStart || '09:00'}" placeholder="09:00" />
+          <input id="scheduleWorkEnd" class="input" type="text" value="${currentAlly.workingEnd || '22:00'}" placeholder="22:00" />
+          <label class="small muted"><input id="scheduleIsOpen" type="checkbox" ${currentAlly.isOpen === false ? '' : 'checked'} /> Negocio abierto</label>
+          <button class="btn btn-primary" type="submit">Guardar horario</button>
+        </form>
+      </div>
+    ` : ''}
+    ${products.map(p => `
+      <div class="list-item">
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="mini-photo">${p.image ? `<img src="${p.image}" alt="${p.name}" />` : '🍽️'}</div>
+          <div><strong>${p.name}</strong><br><span class="muted">${p.category}</span></div>
+        </div>
+        <span class="pill">${formatUsd(getUsdPrice(p))} · ${formatBs(getBsPrice(p))}</span>
+      </div>
+    `).join('')}
+  `;
+  const toggleButton = document.getElementById('toggleAllyStatus');
+  if (toggleButton && currentAlly) {
+    toggleButton.addEventListener('click', () => {
+      const updated = allies.map((ally) => ally.id === currentAlly.id ? { ...ally, isOpen: ally.isOpen !== false, status: ally.isOpen === false ? 'active' : 'paused' } : ally);
+      writeStore(STORAGE_KEYS.allies, updated);
+      renderAllyPage();
+      showMessage('Estado actualizado correctamente', 'success');
+    });
+  }
+  const scheduleForm = document.getElementById('scheduleForm');
+  if (scheduleForm && currentAlly) {
+    scheduleForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const start = document.getElementById('scheduleWorkStart').value;
+      const end = document.getElementById('scheduleWorkEnd').value;
+      const isOpen = document.getElementById('scheduleIsOpen').checked;
+      const updated = allies.map((ally) => ally.id === currentAlly.id ? { ...ally, workingStart: normalizeTimeValue(start), workingEnd: normalizeTimeValue(end), isOpen, status: isOpen ? 'active' : 'paused' } : ally);
+      writeStore(STORAGE_KEYS.allies, updated);
+      renderAllyPage();
+      showMessage('Horario actualizado correctamente', 'success');
+    });
+  }
   const form = document.getElementById('productForm');
   if (form && form.dataset.bound !== 'true') {
     form.dataset.bound = 'true';
