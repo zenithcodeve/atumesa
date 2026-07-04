@@ -479,18 +479,7 @@ function localLogin(email, password) {
 async function loginUser(email, password, role = 'client', name = '', extra = {}) {
   if (state.supabaseEnabled) {
     const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      const msg = String(error.message || '').toLowerCase();
-      if (msg.includes('email') && msg.includes('confirm') || msg.includes('not confirmed') || msg.includes('confirmacion')) {
-        console.warn('Supabase exige confirmación de email. Usando fallback local temporal.');
-        try {
-          return localLogin(email, password);
-        } catch (e) {
-          return localRegister(email, password, role, name, extra);
-        }
-      }
-      throw error;
-    }
+    if (error) throw error;
     const meta = data.user?.user_metadata || {};
     const user = { id: data.user.id, role: meta.role || role || 'client', name: meta.name || name || data.user.email, email: data.user.email, phone: meta.phone || extra.phone || '', address: meta.address || extra.address || '' };
     setCurrentUser(user);
@@ -517,22 +506,7 @@ async function registerUser(email, password, role = 'client', name = '', extra =
   return localRegister(email, password, role, name, extra);
 }
 
-function renderMenuRoleLinks() {
-  const container = document.getElementById('menuRoleLinks');
-  if (!container) return;
-  const user = state.user || getCurrentUser();
-  container.innerHTML = '';
-  if (!user) {
-    // For anonymous users show only the generic login link
-    container.innerHTML = '<a href="#" id="menuLogin">Iniciar sesión</a>';
-    return;
-  }
-  const links = [];
-  if (user.role === 'rider' || user.role === 'motorizado') links.push('<a href="motorizado.html">Iniciar sesión como motorizado</a>');
-  if (user.role === 'ally' || user.role === 'aliado') links.push('<a href="aliado-panel.html">Iniciar sesión como aliado</a>');
-  if (user.role === 'admin') links.push('<a href="admin.html">Iniciar sesión como admin</a>');
-  container.innerHTML = links.join('\n') || '';
-}
+// renderMenuRoleLinks removed per user request
 
 function logout() {
   if (state.supabaseEnabled && state.supabase) state.supabase.auth.signOut();
@@ -772,7 +746,6 @@ function renderApp() {
   if (user) setCurrentUser(user);
   renderCartBadge();
   renderRolePanel();
-  renderMenuRoleLinks();
   renderRestaurants();
   renderCartPage();
   renderCheckoutPage();
