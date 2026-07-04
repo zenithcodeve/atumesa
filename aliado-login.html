@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffcd00" />
+    <title>Acceso Aliados | TuMesa</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="ally-login">
+    <div class="app">
+      <div class="hero">
+        <h1>Acceso para aliados</h1>
+        <p>Gestiona tus productos, promociones y pedidos.</p>
+      </div>
+      <div id="message"></div>
+      <div id="authSection" class="card">
+        <div id="loginCard">
+          <h3>Ingresar como aliado</h3>
+          <form id="loginForm">
+            <input id="loginEmail" class="input" type="email" placeholder="Correo de aliado" required />
+            <input id="loginPassword" class="input" type="password" placeholder="Contraseña" required />
+            <button class="btn btn-primary" type="submit">Entrar</button>
+          </form>
+          <p class="small" style="margin-top:10px">Demo: aliado@tumesa.com / Tm2026!</p>
+          <p style="margin-top:8px"><a href="#" id="showRegister">Crear cuenta</a></p>
+        </div>
+        <div id="registerCard" class="hidden">
+          <h3>Registrar aliado</h3>
+          <form id="registerForm">
+            <input id="registerName" class="input" type="text" placeholder="Nombre del negocio" required />
+            <input id="registerEmail" class="input" type="email" placeholder="Correo" required />
+            <input id="registerPassword" class="input" type="password" placeholder="Contraseña" required />
+            <select id="registerRole">
+              <option value="ally">Aliado</option>
+            </select>
+            <button class="btn btn-primary" type="submit">Crear cuenta</button>
+          </form>
+          <p style="margin-top:8px"><a href="#" id="showLogin">Volver al login</a></p>
+        </div>
+      </div>
+      <div id="dashboardSection" class="hidden">
+        <div class="card">
+          <h3>Panel listo</h3>
+          <p class="muted">Tu cuenta ya está activa. Puedes administrar productos y promociones.</p>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <a class="btn btn-primary" href="aliado-panel.html">Ir al panel</a>
+            <a class="btn btn-secondary" href="index.html.html">Volver al inicio</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

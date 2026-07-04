@@ -1,0 +1,19 @@
+{
+  "name": "TuMesa Delivery",
+  "short_name": "TuMesa",
+  "description": "PWA de comida rápida inspirada en Didi Food",
+  "start_url": "./index.html.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "./",
+  "background_color": "#fffdf7",
+  "theme_color": "#ffcd00",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

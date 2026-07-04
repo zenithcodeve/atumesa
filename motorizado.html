@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffcd00" />
+    <title>Motorizados | TuMesa</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="rider">
+    <div class="app">
+      <div class="topbar">
+        <div><strong>Motorizados</strong><br><span class="pill">Ruta activa</span></div>
+        <a href="index.html.html" class="pill">← Inicio</a>
+      </div>
+
+      <div id="message"></div>
+
+      <section class="hero">
+        <h1>Hola, Luis</h1>
+        <p>Gestiona tus entregas y marca los pedidos como completados.</p>
+      </section>
+
+      <div class="card">
+        <h3>Entregas pendientes</h3>
+        <div id="deliveryList"></div>
+      </div>
+    </div>
+  </body>
+</html>

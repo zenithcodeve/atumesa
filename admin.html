@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffcd00" />
+    <title>Admin | TuMesa</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body data-page="admin">
+    <div class="app">
+      <div class="topbar">
+        <div><strong>Panel Admin</strong><br><span class="pill">Gestión de aliados</span></div>
+        <a href="index.html.html" class="pill">← Inicio</a>
+      </div>
+
+      <div id="message"></div>
+
+      <section class="hero">
+        <h1>Crear aliados y credenciales</h1>
+        <p>Registra restaurantes, motorizados y genera accesos con contraseña.</p>
+      </section>
+
+      <div class="card">
+        <h3>Tasa referencial BCV</h3>
+        <form id="rateForm">
+          <input id="rateInput" class="input" type="number" step="0.01" placeholder="Ej. 36" required />
+          <button class="btn btn-primary" type="submit">Actualizar tasa</button>
+        </form>
+        <div id="adminRate" class="small muted" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Nuevo aliado o motorizado</h3>
+        <form id="allyForm">
+          <input id="allyName" class="input" type="text" placeholder="Nombre del aliado o motorizado" required />
+          <input id="allyEmail" class="input" type="email" placeholder="Correo de acceso" required />
+          <input id="allyPassword" class="input" type="password" placeholder="Clave de acceso" required />
+          <select id="allyRole">
+            <option value="ally">Aliado</option>
+            <option value="rider">Motorizado</option>
+          </select>
+          <input id="allyCommission" class="input" type="text" placeholder="Comisión (%)" />
+          <input id="allyPhotoUrl" class="input" type="url" placeholder="URL de foto" />
+          <input id="allyPhotoFile" class="input" type="file" accept="image/*" />
+          <input id="allyGpsLat" class="input" type="number" step="0.000001" placeholder="Latitud GPS del comercio" />
+          <input id="allyGpsLon" class="input" type="number" step="0.000001" placeholder="Longitud GPS del comercio" />
+          <button class="btn btn-primary" type="submit">Crear cuenta</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Registros recientes</h3>
+        <div id="adminList"></div>
+      </div>
+    </div>
+  </body>
+</html>
